@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  backend:
+    build: ./backend
+    container_name: omnitube-backend
+    restart: unless-stopped
+    volumes:
+      - omnitube-data:/app/data
+    environment:
+      - OMNITUBE_DATABASE_URL=sqlite+aiosqlite:///./data/omnitube.db
+      - OMNITUBE_DATA_DIR=/app/data
+      - OMNITUBE_RSS_POLL_INTERVAL=15
+      - OMNITUBE_CORS_ORIGINS=["http://localhost:3000","http://localhost"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - omnitube
+
+  frontend:
+    build: ./frontend
+    container_name: omnitube-frontend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - ORIGIN=http://localhost
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - omnitube
+
+  nginx:
+    image: nginx:alpine
+    container_name: omnitube-nginx
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - omnitube
+
+volumes:
+  omnitube-data:
+    driver: local
+
+networks:
+  omnitube:
+    driver: bridge

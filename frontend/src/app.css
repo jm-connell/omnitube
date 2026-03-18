@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Theme CSS Variables ─────────────────────────────────────────── */
+
+:root {
+  /* Dark theme (default) — Hyprland-inspired blue-gray */
+  --omni-bg: #0f172a;
+  --omni-surface: #1e293b;
+  --omni-surface-hover: #283548;
+  --omni-border: #334155;
+  --omni-text: #e2e8f0;
+  --omni-text-muted: #94a3b8;
+  --omni-accent: #7dd3fc;
+  --omni-accent-hover: #38bdf8;
+}
+
+:root.light {
+  --omni-bg: #f1f5f9;
+  --omni-surface: #ffffff;
+  --omni-surface-hover: #f8fafc;
+  --omni-border: #cbd5e1;
+  --omni-text: #1e293b;
+  --omni-text-muted: #64748b;
+  --omni-accent: #0284c7;
+  --omni-accent-hover: #0369a1;
+}
+
+/* ── Accent color overrides (applied via JS) ─────────────────── */
+
+:root.accent-sky {
+  --omni-accent: #7dd3fc;
+  --omni-accent-hover: #38bdf8;
+}
+
+:root.accent-violet {
+  --omni-accent: #c4b5fd;
+  --omni-accent-hover: #a78bfa;
+}
+
+:root.accent-emerald {
+  --omni-accent: #6ee7b7;
+  --omni-accent-hover: #34d399;
+}
+
+:root.accent-rose {
+  --omni-accent: #fda4af;
+  --omni-accent-hover: #fb7185;
+}
+
+:root.accent-amber {
+  --omni-accent: #fcd34d;
+  --omni-accent-hover: #fbbf24;
+}
+
+:root.accent-cyan {
+  --omni-accent: #67e8f9;
+  --omni-accent-hover: #22d3ee;
+}
+
+/* ── Base Styles ─────────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--omni-bg);
+  color: var(--omni-text);
+  font-family: "Inter", system-ui, sans-serif;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--omni-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--omni-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--omni-text-muted);
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid var(--omni-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Monospace accents */
+.font-display {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
