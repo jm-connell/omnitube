@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { getFeed, refreshFeed, type Video } from '$lib/api';
 	import { settingsStore } from '$lib/settings.svelte';
 	import { timeAgo, formatCount, formatDuration } from '$lib/utils';
@@ -114,9 +115,6 @@
 			feed
 		</h1>
 		<div class="flex items-center gap-3">
-			<span class="text-xs font-mono text-omni-text-muted">
-				{total} videos
-			</span>
 			{#if channelFilter}
 				<a
 					href="/"
@@ -215,9 +213,24 @@
 							<h3 class="line-clamp-2 text-sm font-mono font-medium leading-snug text-omni-text group-hover:text-omni-accent transition-colors">
 								{video.title}
 							</h3>
-							<p class="mt-1 text-xs font-mono text-omni-text-muted">
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<span
+								class="mt-1 inline-block text-xs font-mono text-omni-accent hover:underline transition-colors cursor-pointer"
+								onclick={(e) => {
+									e.preventDefault();
+									e.stopPropagation();
+									goto(`/?channel=${video.channel_id}`);
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										e.preventDefault();
+										e.stopPropagation();
+										goto(`/?channel=${video.channel_id}`);
+									}
+								}}
+							>
 								{video.channel_name || video.channel_id}
-							</p>
+							</span>
 						</div>
 
 						<div class="flex items-center gap-3 text-[11px] font-mono text-omni-text-muted/70">

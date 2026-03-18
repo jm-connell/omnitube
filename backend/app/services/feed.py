@@ -6,7 +6,8 @@ Uses the UULF playlist trick to get long-form-only feeds
 
 import asyncio
 import logging
-from datetime import datetime
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 
 import feedparser
 import httpx
@@ -19,16 +20,19 @@ from app.models import Channel, Video
 logger = logging.getLogger("omnitube.feed")
 
 
-def _build_rss_url(channel_id: str) -> str:
-    """Build RSS URL using the UULF trick to exclude Shorts/lives.
+def _build_rss_urls(channel_id: str) -> list[str]:
+    """Build RSS URLs with fallbacks for reliability.
 
-    Converts UC... channel_id → UULF... playlist_id for long-form only.
+    Tries UULF playlist first (excludes Shorts/lives),
+    falls back to standard channel feed.
     """
+    urls = []
     if channel_id.startswith("UC"):
-        playlist_id = "UULF" + channel_id[2:]
+        urls.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id=UULF{channel_id[2:]}")
+        urls.append(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
     else:
-        playlist_id = channel_id
-    return f"https://www.youtube.com/feeds/videos.xml?playlist_id={playlist_id}"
+        urls.append(f"https://www.youtube.com/feeds/videos.xml?playlist_id={channel_id}")
+    return urls
 
 
 async def _fetch_feed(url: str) -> str:
@@ -39,9 +43,42 @@ async def _fetch_feed(url: str) -> str:
         return resp.text
 
 
+def _parse_view_counts(xml_text: str) -> dict[str, int]:
+    """Parse view counts from raw XML since feedparser doesn't handle media:community well."""
+    view_counts: dict[str, int] = {}
+    try:
+        root = ET.fromstring(xml_text)
+        ns = {
+            "atom": "http://www.w3.org/2005/Atom",
+            "yt": "http://www.youtube.com/xml/schemas/2015",
+            "media": "http://search.yahoo.com/mrss/",
+        }
+        for entry in root.findall("atom:entry", ns):
+            vid_el = entry.find("yt:videoId", ns)
+            if vid_el is None or not vid_el.text:
+                continue
+            video_id = vid_el.text.strip()
+            community = entry.find("media:group/media:community", ns)
+            if community is None:
+                continue
+            stats = community.find("media:statistics", ns)
+            if stats is not None:
+                views = stats.get("views")
+                if views:
+                    try:
+                        view_counts[video_id] = int(views)
+                    except (ValueError, TypeError):
+                        pass
+    except ET.ParseError:
+        logger.warning("Failed to parse XML for view counts")
+    return view_counts
+
+
 def _parse_feed(xml_text: str) -> list[dict]:
     """Parse an Atom feed and return a list of video dicts."""
     feed = feedparser.parse(xml_text)
+    # Extract view counts from raw XML (feedparser doesn't handle media:community well)
+    view_counts = _parse_view_counts(xml_text)
     videos = []
     for entry in feed.entries:
         video_id = entry.get("yt_videoid", "")
@@ -53,12 +90,12 @@ def _parse_feed(xml_text: str) -> list[dict]:
         if not video_id:
             continue
 
-        # Parse published date
+        # Parse published date (feedparser returns UTC time)
         published = entry.get("published_parsed") or entry.get("updated_parsed")
         if published:
-            pub_dt = datetime(*published[:6])
+            pub_dt = datetime(*published[:6], tzinfo=timezone.utc)
         else:
-            pub_dt = datetime.utcnow()
+            pub_dt = datetime.now(timezone.utc)
 
         # Thumbnail
         thumbnail = None
@@ -78,6 +115,9 @@ def _parse_feed(xml_text: str) -> list[dict]:
             if "/channel/" in href:
                 channel_id = href.split("/channel/")[-1]
 
+        # View count from XML parsing
+        view_count = view_counts.get(video_id)
+
         videos.append({
             "video_id": video_id,
             "channel_id": channel_id,
@@ -85,6 +125,7 @@ def _parse_feed(xml_text: str) -> list[dict]:
             "thumbnail_url": thumbnail,
             "published_at": pub_dt,
             "description": entry.get("summary", None),
+            "view_count": view_count,
         })
 
     return videos
@@ -92,13 +133,25 @@ def _parse_feed(xml_text: str) -> list[dict]:
 
 async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
     """Fetch and store new videos for a single channel. Returns count of new videos."""
-    url = _build_rss_url(channel_id)
+    urls = _build_rss_urls(channel_id)
     new_count = 0
+    videos: list[dict] = []
+
+    for url in urls:
+        try:
+            xml_text = await _fetch_feed(url)
+            videos = _parse_feed(xml_text)
+            if videos:
+                break
+        except Exception as e:
+            logger.warning(f"Feed URL failed for {channel_id}: {url} — {e}")
+            continue
+
+    if not videos:
+        logger.error(f"No videos found for {channel_id} (tried {len(urls)} URLs)")
+        return 0
 
     try:
-        xml_text = await _fetch_feed(url)
-        videos = _parse_feed(xml_text)
-
         for v in videos:
             # Fix channel_id if not parsed from feed
             if not v["channel_id"]:
@@ -107,7 +160,11 @@ async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
             existing = await db.execute(
                 select(Video).where(Video.video_id == v["video_id"])
             )
-            if existing.scalar_one_or_none():
+            existing_video = existing.scalar_one_or_none()
+            if existing_video:
+                # Update view count on existing videos
+                if v.get("view_count") and v["view_count"] != existing_video.view_count:
+                    existing_video.view_count = v["view_count"]
                 continue
 
             video = Video(
@@ -117,6 +174,7 @@ async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
                 thumbnail_url=v["thumbnail_url"],
                 published_at=v["published_at"],
                 description=v["description"],
+                view_count=v.get("view_count"),
             )
             db.add(video)
             new_count += 1
@@ -125,7 +183,7 @@ async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
         logger.info(f"Channel {channel_id}: {new_count} new videos")
 
     except Exception as e:
-        logger.error(f"Failed to fetch feed for {channel_id}: {e}")
+        logger.error(f"Failed to store videos for {channel_id}: {e}")
         await db.rollback()
 
     return new_count

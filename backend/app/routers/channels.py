@@ -55,6 +55,9 @@ async def add_channel(data: ChannelCreate, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass  # Feed fetch failure shouldn't block subscription
 
+    # Re-fetch channel after feed refresh (commit inside refresh expires the object)
+    await db.refresh(channel)
+
     return channel
 
 

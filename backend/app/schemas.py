@@ -83,6 +83,19 @@ class StreamInfo(BaseModel):
     available_qualities: list[int] | None = None
 
 
+class Comment(BaseModel):
+    author: str
+    text: str
+    likes: int = 0
+    time_text: str | None = None
+    is_pinned: bool = False
+
+
+class CommentsResponse(BaseModel):
+    comments: list[Comment]
+    count: int | None = None
+
+
 # ── App State ─────────────────────────────────────────────────────────
 
 class SetupStatus(BaseModel):

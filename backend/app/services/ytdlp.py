@@ -29,7 +29,7 @@ QUALITY_FORMATS = {
     360: "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[ext=mp4]/best",
 }
 
-DEFAULT_QUALITY = 1440
+DEFAULT_QUALITY = 1080
 
 # Common languages for auto-captions (limit dropdown size)
 _COMMON_LANGS = {"en", "es", "fr", "de", "it", "pt", "ja", "ko", "zh-Hans", "zh-Hant", "ru", "ar", "hi", "nl", "pl", "sv", "tr"}
@@ -178,3 +178,69 @@ async def get_stream_info(video_id: str, quality: int = DEFAULT_QUALITY) -> Stre
         height=height,
         available_qualities=available_qualities,
     )
+
+
+def _extract_comments_sync(video_id: str, max_comments: int = 30) -> list[dict]:
+    """Synchronous comment extraction via yt-dlp."""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "no_color": True,
+        "getcomments": True,
+        "extractor_args": {
+            "youtube": {
+                "max_comments": [str(max_comments), str(max_comments), "0", "0"],
+                "comment_sort": ["top"],
+            }
+        },
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    return info.get("comments") or []
+
+
+async def get_comments(video_id: str, max_comments: int = 30) -> tuple[list[dict], int | None]:
+    """Extract top comments for a video. Returns (comments, total_count)."""
+    loop = asyncio.get_event_loop()
+    raw_comments = await loop.run_in_executor(
+        None, partial(_extract_comments_sync, video_id, max_comments)
+    )
+
+    comments = []
+    for c in raw_comments[:max_comments]:
+        comments.append({
+            "author": c.get("author", "Unknown"),
+            "text": c.get("text", ""),
+            "likes": c.get("like_count", 0) or 0,
+            "time_text": c.get("time_text") or c.get("_time_text"),
+            "is_pinned": c.get("is_pinned", False),
+        })
+
+    return comments, len(raw_comments)
+
+
+async def get_download_url(video_id: str, quality: int = 720) -> str | None:
+    """Get a combined-format download URL (less throttled by YouTube)."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, partial(_extract_download_url, video_id, quality)
+    )
+
+
+def _extract_download_url(video_id: str, quality: int = 720) -> str | None:
+    """Synchronous: extract a combined-format download URL."""
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    opts = {
+        "format": f"best[height<={quality}][ext=mp4]/best[ext=mp4]/best",
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "no_color": True,
+    }
+    if settings.ytdlp_proxy:
+        opts["proxy"] = settings.ytdlp_proxy
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+    return info.get("url") or None

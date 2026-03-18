@@ -160,3 +160,25 @@ export function getStreamInfo(
 export function getStreamRedirectURL(video_id: string): string {
   return `${BASE}/api/stream/${video_id}/redirect`;
 }
+
+// ── Comments ─────────────────────────────────────────────────────
+
+export interface CommentData {
+  author: string;
+  text: string;
+  likes: number;
+  time_text: string | null;
+  is_pinned: boolean;
+}
+
+export interface CommentsResponse {
+  comments: CommentData[];
+  count: number | null;
+}
+
+export function getComments(
+  video_id: string,
+  limit = 30,
+): Promise<CommentsResponse> {
+  return fetchJSON(`/api/stream/${video_id}/comments?limit=${limit}`);
+}
