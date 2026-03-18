@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { getStreamInfo, type StreamInfo } from '$lib/api';
 	import { settingsStore } from '$lib/settings.svelte';
@@ -8,9 +8,12 @@
 	let streamInfo = $state<StreamInfo | null>(null);
 	let loading = $state(true);
 	let error = $state('');
-	let videoEl: HTMLVideoElement;
-	let audioEl: HTMLAudioElement;
+	let videoEl = $state<HTMLVideoElement>();
+	let audioEl = $state<HTMLAudioElement>();
 	let showDescription = $state(false);
+	let theaterMode = $state(false);
+	let selectedQuality = $state(1440);
+	let changingQuality = $state(false);
 
 	$effect(() => {
 		const videoId = $page.params.id;
@@ -19,40 +22,82 @@
 		}
 	});
 
-	async function loadVideo(videoId: string) {
-		loading = true;
+	async function loadVideo(videoId: string, quality?: number) {
+		if (!quality) {
+			loading = true;
+		}
 		error = '';
 		try {
-			streamInfo = await getStreamInfo(videoId);
+			streamInfo = await getStreamInfo(videoId, quality || selectedQuality);
+			if (streamInfo.available_qualities?.length && !quality) {
+				if (!streamInfo.available_qualities.includes(selectedQuality)) {
+					selectedQuality = streamInfo.available_qualities[0];
+				}
+			}
 		} catch (e: any) {
 			error = e.message || 'Failed to load video';
 		} finally {
 			loading = false;
+			changingQuality = false;
 		}
 	}
 
-	/**
-	 * Synchronize audio with video for separate streams (DASH).
-	 */
+	async function changeQuality(quality: number) {
+		if (quality === selectedQuality || !streamInfo) return;
+		const currentTime = videoEl?.currentTime || 0;
+		const wasPlaying = videoEl && !videoEl.paused;
+		selectedQuality = quality;
+		changingQuality = true;
+		const videoId = $page.params.id;
+		if (videoId) {
+			await loadVideo(videoId, quality);
+			await tick();
+			if (videoEl) {
+				videoEl.currentTime = currentTime;
+				if (wasPlaying) videoEl.play();
+			}
+			if (audioEl) {
+				audioEl.currentTime = currentTime;
+				if (wasPlaying) audioEl.play();
+			}
+		}
+	}
+
 	function syncAudio() {
 		if (!audioEl || !videoEl) return;
+		const audio = audioEl;
+		const video = videoEl;
+		if (!video.paused) {
+			audio.currentTime = video.currentTime;
+			audio.play();
+		}
+		video.addEventListener('play', () => {
+			audio.currentTime = video.currentTime;
+			audio.play();
+		});
+		video.addEventListener('pause', () => audio.pause());
+		video.addEventListener('seeked', () => {
+			audio.currentTime = video.currentTime;
+		});
+		video.addEventListener('ratechange', () => {
+			audio.playbackRate = video.playbackRate;
+		});
+	}
 
-		videoEl.addEventListener('play', () => {
-			audioEl.currentTime = videoEl.currentTime;
-			audioEl.play();
-		});
-		videoEl.addEventListener('pause', () => audioEl.pause());
-		videoEl.addEventListener('seeked', () => {
-			audioEl.currentTime = videoEl.currentTime;
-		});
-		videoEl.addEventListener('ratechange', () => {
-			audioEl.playbackRate = videoEl.playbackRate;
-		});
+	function linkifyDescription(text: string): string {
+		const escaped = text
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;');
+		return escaped.replace(
+			/(https?:\/\/[^\s<]+)/g,
+			'<a href="$1" target="_blank" rel="noopener noreferrer" class="text-omni-accent hover:underline break-all">$1</a>'
+		);
 	}
 
 	onMount(() => {
 		return () => {
-			// Cleanup
 			if (audioEl) {
 				audioEl.pause();
 				audioEl.src = '';
@@ -67,7 +112,7 @@
 	<title>{streamInfo?.title || 'Loading...'} — OmniTube</title>
 </svelte:head>
 
-<div class="mx-auto max-w-5xl px-4 py-6">
+<div class="mx-auto px-4 py-6 transition-all duration-300 {theaterMode ? 'max-w-screen-2xl' : 'max-w-5xl'}">
 	<!-- Back link -->
 	<a
 		href="/"
@@ -97,13 +142,18 @@
 		</div>
 	{:else if streamInfo}
 		<!-- Video Player -->
-		<div class="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+		<div
+			class="relative w-full overflow-hidden rounded-lg bg-black"
+			style="aspect-ratio: {streamInfo.width && streamInfo.height ? `${streamInfo.width}/${streamInfo.height}` : '16/9'}"
+		>
+		<!-- svelte-ignore a11y_media_has_caption -->
 			<video
 				bind:this={videoEl}
 				class="h-full w-full"
 				controls
 				autoplay
 				playsinline
+				preload="auto"
 				src={streamInfo.video_url}
 				onloadeddata={() => {
 					if (streamInfo?.audio_url) {
@@ -111,10 +161,20 @@
 					}
 				}}
 			>
-				<track kind="captions" />
+				{#if streamInfo.subtitles && streamInfo.subtitles.length > 0}
+					{#each streamInfo.subtitles as sub}
+						<track
+							kind="captions"
+							src="/api/stream/{$page.params.id}/subtitles/{sub.lang}"
+							srclang={sub.lang}
+							label={sub.label}
+						/>
+					{/each}
+				{:else}
+					<track kind="captions" />
+				{/if}
 			</video>
 
-			<!-- Hidden audio element for separate audio stream -->
 			{#if streamInfo.audio_url}
 				<audio
 					bind:this={audioEl}
@@ -124,15 +184,42 @@
 			{/if}
 		</div>
 
+		<!-- Player Controls -->
+		<div class="mt-2 flex items-center justify-end gap-2">
+			{#if streamInfo.available_qualities?.length}
+				<select
+					class="appearance-none rounded border border-omni-border bg-omni-surface px-2 py-1 pr-7 text-xs font-mono text-omni-text-muted
+						hover:border-omni-accent focus:border-omni-accent focus:outline-none transition-colors
+						{changingQuality ? 'opacity-50' : ''}"
+					value={selectedQuality}
+					onchange={(e) => changeQuality(Number(e.currentTarget.value))}
+					disabled={changingQuality}
+				>
+					{#each streamInfo.available_qualities as q}
+						<option value={q}>{q}p</option>
+					{/each}
+				</select>
+			{/if}
+
+			<button
+				class="rounded border border-omni-border bg-omni-surface px-2 py-1 text-xs font-mono text-omni-text-muted
+					hover:border-omni-accent hover:text-omni-accent transition-colors"
+				onclick={() => theaterMode = !theaterMode}
+				title={theaterMode ? 'Exit theater mode' : 'Theater mode'}
+			>
+				{theaterMode ? 'exit theater' : 'theater'}
+			</button>
+		</div>
+
 		<!-- Video Info -->
 		<div class="mt-4 space-y-3">
-			<h1 class="text-lg font-semibold leading-snug text-omni-text">
+			<h1 class="text-lg font-mono font-semibold leading-snug text-omni-text">
 				{streamInfo.title}
 			</h1>
 
 			<div class="flex flex-wrap items-center gap-4 text-xs font-mono text-omni-text-muted">
 				{#if streamInfo.channel}
-					<span class="text-omni-accent">{streamInfo.channel}</span>
+					<a href="/?channel={streamInfo.channel_id}" class="text-omni-accent hover:underline transition-colors">{streamInfo.channel}</a>
 				{/if}
 				{#if streamInfo.duration}
 					<span>{formatDuration(streamInfo.duration)}</span>
@@ -192,9 +279,7 @@
 					</button>
 					{#if showDescription}
 						<div class="border-t border-omni-border px-4 py-3 animate-fade-in">
-							<pre class="whitespace-pre-wrap text-sm font-mono text-omni-text-muted leading-relaxed">
-								{streamInfo.description}
-							</pre>
+							<pre class="whitespace-pre-wrap text-sm font-mono text-omni-text-muted leading-relaxed text-left">{@html linkifyDescription(streamInfo.description)}</pre>
 						</div>
 					{/if}
 				</div>

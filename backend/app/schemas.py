@@ -61,6 +61,11 @@ class FeedResponse(BaseModel):
 
 # ── Stream ────────────────────────────────────────────────────────────
 
+class SubtitleTrack(BaseModel):
+    lang: str
+    label: str
+
+
 class StreamInfo(BaseModel):
     video_url: str
     audio_url: str | None = None
@@ -70,7 +75,12 @@ class StreamInfo(BaseModel):
     view_count: int | None = None
     like_count: int | None = None
     channel: str | None = None
+    channel_id: str | None = None
     chapters: list[dict] | None = None
+    subtitles: list[SubtitleTrack] | None = None
+    width: int | None = None
+    height: int | None = None
+    available_qualities: list[int] | None = None
 
 
 # ── App State ─────────────────────────────────────────────────────────

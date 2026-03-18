@@ -67,7 +67,7 @@ def _parse_feed(xml_text: str) -> list[dict]:
             if isinstance(media_group, list) and len(media_group) > 0:
                 thumbnail = media_group[0].get("url")
         if not thumbnail:
-            thumbnail = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            thumbnail = f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
 
         # Channel ID from feed
         channel_id = ""

@@ -38,6 +38,11 @@ export interface FeedResponse {
   per_page: number;
 }
 
+export interface SubtitleTrack {
+  lang: string;
+  label: string;
+}
+
 export interface StreamInfo {
   video_url: string;
   audio_url: string | null;
@@ -47,11 +52,16 @@ export interface StreamInfo {
   view_count: number | null;
   like_count: number | null;
   channel: string | null;
+  channel_id: string | null;
   chapters: Array<{
     title: string;
     start_time: number;
     end_time: number;
   }> | null;
+  subtitles: SubtitleTrack[] | null;
+  width: number | null;
+  height: number | null;
+  available_qualities: number[] | null;
 }
 
 export interface SetupStatus {
@@ -139,8 +149,12 @@ export function refreshFeed(): Promise<{ ok: boolean; new_videos: number }> {
 
 // ── Stream ───────────────────────────────────────────────────────
 
-export function getStreamInfo(video_id: string): Promise<StreamInfo> {
-  return fetchJSON(`/api/stream/${video_id}`);
+export function getStreamInfo(
+  video_id: string,
+  quality?: number,
+): Promise<StreamInfo> {
+  const params = quality ? `?quality=${quality}` : "";
+  return fetchJSON(`/api/stream/${video_id}${params}`);
 }
 
 export function getStreamRedirectURL(video_id: string): string {

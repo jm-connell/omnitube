@@ -1,19 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import { getFeed, refreshFeed, type Video } from '$lib/api';
 	import { settingsStore } from '$lib/settings.svelte';
-	import { timeAgo, formatCount } from '$lib/utils';
+	import { timeAgo, formatCount, formatDuration } from '$lib/utils';
 
 	let videos = $state<Video[]>([]);
 	let loading = $state(true);
 	let loadingMore = $state(false);
 	let refreshing = $state(false);
-	let page = $state(1);
+	let currentPage = $state(1);
 	let total = $state(0);
 	let error = $state('');
 
 	const perPage = 30;
 	let hasMore = $derived(videos.length < total);
+	let channelFilter = $derived($page.url.searchParams.get('channel'));
 
 	async function loadFeed(pageNum = 1, append = false) {
 		try {
@@ -24,14 +26,14 @@
 			}
 			error = '';
 
-			const res = await getFeed(pageNum, perPage);
+			const res = await getFeed(pageNum, perPage, channelFilter || undefined);
 			if (append) {
 				videos = [...videos, ...res.videos];
 			} else {
 				videos = res.videos;
 			}
 			total = res.total;
-			page = pageNum;
+			currentPage = pageNum;
 		} catch (e: any) {
 			error = e.message || 'Failed to load feed';
 		} finally {
@@ -44,8 +46,7 @@
 		refreshing = true;
 		try {
 			await refreshFeed();
-			// Reset to page 1 to show newest content
-			page = 1;
+			currentPage = 1;
 			await loadFeed(1);
 		} catch (e: any) {
 			error = e.message || 'Refresh failed';
@@ -56,13 +57,13 @@
 
 	function loadMore() {
 		if (!loadingMore && hasMore) {
-			loadFeed(page + 1, true);
+			loadFeed(currentPage + 1, true);
 		}
 	}
 
 	// Intersection observer for infinite scroll — uses $effect to
 	// react to the sentinel element appearing/disappearing in the DOM
-	let sentinel: HTMLDivElement;
+	let sentinel = $state<HTMLDivElement | null>(null);
 	let observer: IntersectionObserver | null = null;
 
 	$effect(() => {
@@ -88,6 +89,17 @@
 		loadFeed();
 	});
 
+	// Reload when channel filter changes via URL navigation
+	let prevChannelFilter: string | null | undefined;
+	$effect(() => {
+		const ch = channelFilter;
+		if (prevChannelFilter !== undefined && ch !== prevChannelFilter) {
+			currentPage = 1;
+			loadFeed(1);
+		}
+		prevChannelFilter = ch;
+	});
+
 	const settings = $derived(settingsStore.current);
 </script>
 
@@ -105,6 +117,15 @@
 			<span class="text-xs font-mono text-omni-text-muted">
 				{total} videos
 			</span>
+			{#if channelFilter}
+				<a
+					href="/"
+					class="rounded-md border border-omni-accent/30 bg-omni-accent/10 px-2 py-1 text-xs font-mono text-omni-accent
+						hover:bg-omni-accent/20 transition-colors"
+				>
+					filtered &times; clear
+				</a>
+			{/if}
 			<button
 				class="rounded-md border border-omni-border bg-omni-surface px-3 py-1.5 text-xs font-mono text-omni-text-muted
 					hover:border-omni-accent hover:text-omni-accent transition-colors disabled:opacity-50"
@@ -173,16 +194,16 @@
 				>
 					<!-- Thumbnail -->
 					{#if settings.showThumbnails && video.thumbnail_url}
-						<div class="relative h-24 w-40 shrink-0 overflow-hidden rounded-md bg-omni-bg">
+						<div class="relative w-40 shrink-0 overflow-hidden rounded-md bg-omni-bg aspect-video">
 							<img
-								src={video.thumbnail_url}
+								src={video.thumbnail_url.replace('/hqdefault.jpg', '/mqdefault.jpg')}
 								alt=""
 								class="h-full w-full object-cover transition-transform group-hover:scale-105"
 								loading="lazy"
 							/>
 							{#if video.duration_seconds}
 								<span class="absolute bottom-1 right-1 rounded bg-black/80 px-1.5 py-0.5 text-[10px] font-mono text-white">
-									{formatCount(video.duration_seconds)}
+									{formatDuration(video.duration_seconds)}
 								</span>
 							{/if}
 						</div>
@@ -191,7 +212,7 @@
 					<!-- Info -->
 					<div class="flex min-w-0 flex-1 flex-col justify-between py-0.5">
 						<div>
-							<h3 class="line-clamp-2 text-sm font-medium leading-snug text-omni-text group-hover:text-omni-accent transition-colors">
+							<h3 class="line-clamp-2 text-sm font-mono font-medium leading-snug text-omni-text group-hover:text-omni-accent transition-colors">
 								{video.title}
 							</h3>
 							<p class="mt-1 text-xs font-mono text-omni-text-muted">
