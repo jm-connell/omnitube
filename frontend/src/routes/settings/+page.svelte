@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { settingsStore } from '$lib/settings.svelte';
+	import { settingsStore, THEME_META, type ThemeName } from '$lib/settings.svelte';
 
 	const settings = $derived(settingsStore.current);
 
@@ -12,8 +12,20 @@
 		{ id: 'cyan', label: 'Cyan', swatch: '#67e8f9' },
 	] as const;
 
-	function toggleTheme() {
-		settingsStore.update({ theme: settings.theme === 'dark' ? 'light' : 'dark' });
+	const themes = Object.entries(THEME_META) as [ThemeName, { label: string; description: string }][];
+
+	const qualityOptions = [
+		{ value: 0, label: 'Highest Available' },
+		{ value: 2160, label: '4K (2160p)' },
+		{ value: 1440, label: '1440p' },
+		{ value: 1080, label: '1080p' },
+		{ value: 720, label: '720p (recommended)' },
+		{ value: 480, label: '480p' },
+		{ value: 360, label: '360p' },
+	];
+
+	function setTheme(theme: ThemeName) {
+		settingsStore.update({ theme });
 	}
 
 	function setAccent(color: typeof settings.accentColor) {
@@ -22,6 +34,19 @@
 
 	function toggle(key: keyof typeof settings) {
 		settingsStore.update({ [key]: !settings[key] } as any);
+	}
+
+	let bgImageInput = $state('');
+
+	function applyBackgroundImage() {
+		if (bgImageInput.trim()) {
+			settingsStore.update({ backgroundImage: bgImageInput.trim() });
+		}
+	}
+
+	function clearBackgroundImage() {
+		bgImageInput = '';
+		settingsStore.update({ backgroundImage: '' });
 	}
 </script>
 
@@ -39,20 +64,51 @@
 		</h2>
 
 		<div class="space-y-4 rounded-lg border border-omni-border bg-omni-surface p-4">
-			<!-- Theme toggle -->
-			<div class="flex items-center justify-between">
-				<div>
-					<p class="text-sm font-medium text-omni-text">Theme</p>
-					<p class="text-xs text-omni-text-muted">Switch between dark and light mode</p>
+			<!-- Theme grid -->
+			<div>
+				<p class="mb-3 text-sm font-medium text-omni-text">Theme</p>
+				<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+					{#each themes as [id, meta]}
+						<button
+							class="flex flex-col rounded-lg border px-3 py-2.5 text-left transition-all
+								{settings.theme === id
+									? 'border-omni-accent bg-omni-accent/10'
+									: 'border-omni-border hover:border-omni-text-muted'}"
+							onclick={() => setTheme(id)}
+						>
+							<span class="text-sm font-medium text-omni-text">{meta.label}</span>
+							<span class="text-xs text-omni-text-muted">{meta.description}</span>
+						</button>
+					{/each}
 				</div>
-				<button
-					class="rounded-full border border-omni-border bg-omni-bg px-4 py-1.5 text-xs font-mono text-omni-text
-						hover:border-omni-accent transition-colors"
-					onclick={toggleTheme}
-				>
-					{settings.theme === 'dark' ? '◑ dark' : '○ light'}
-				</button>
 			</div>
+
+			<!-- Background URL for translucent theme -->
+			{#if settings.theme === 'translucent'}
+				<div>
+					<p class="mb-1 text-sm font-medium text-omni-text">Background Image URL</p>
+					<p class="mb-2 text-xs text-omni-text-muted">Direct link to an image (png, jpg, webp)</p>
+					<div class="flex gap-2">
+						<input
+							type="url"
+							class="flex-1 rounded-md border border-omni-border bg-omni-bg px-3 py-1.5 text-sm text-omni-text placeholder:text-omni-text-muted/50 focus:border-omni-accent focus:outline-none"
+							placeholder="https://example.com/wallpaper.jpg"
+							bind:value={bgImageInput}
+							onkeydown={(e) => { if (e.key === 'Enter') applyBackgroundImage(); }}
+						/>
+						<button
+							class="rounded-md border border-omni-border px-3 py-1.5 text-xs font-mono text-omni-text hover:border-omni-accent transition-colors"
+							onclick={applyBackgroundImage}
+						>apply</button>
+						{#if settings.backgroundImage}
+							<button
+								class="rounded-md border border-omni-border px-3 py-1.5 text-xs font-mono text-omni-text-muted hover:border-rose-400 hover:text-rose-400 transition-colors"
+								onclick={clearBackgroundImage}
+							>clear</button>
+						{/if}
+					</div>
+				</div>
+			{/if}
 
 			<!-- Accent color -->
 			<div>
@@ -77,6 +133,99 @@
 					{/each}
 				</div>
 			</div>
+		</div>
+	</section>
+
+	<!-- Video Playback Section -->
+	<section class="mb-8">
+		<h2 class="mb-4 text-xs font-mono font-semibold uppercase tracking-wider text-omni-text-muted">
+			Video Playback
+		</h2>
+
+		<div class="space-y-4 rounded-lg border border-omni-border bg-omni-surface p-4">
+			<!-- Default quality -->
+			<div>
+				<p class="mb-1 text-sm font-medium text-omni-text">Default Resolution</p>
+				<p class="mb-2 text-xs text-omni-text-muted">
+					Higher resolutions may buffer or fail due to YouTube throttling. 720p is the most reliable.
+				</p>
+				<div class="flex flex-wrap gap-2">
+					{#each qualityOptions as opt}
+						<button
+							class="rounded-md border px-3 py-1.5 text-xs font-mono transition-all
+								{settings.defaultQuality === opt.value
+									? 'border-omni-accent bg-omni-accent/10 text-omni-accent'
+									: 'border-omni-border text-omni-text-muted hover:border-omni-text-muted'}"
+							onclick={() => settingsStore.update({ defaultQuality: opt.value })}
+						>
+							{opt.label}
+						</button>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Theater mode default -->
+			<label class="flex cursor-pointer items-center justify-between hover:bg-omni-surface-hover transition-colors rounded-md px-1 py-2">
+				<div>
+					<p class="text-sm font-medium text-omni-text">Theater Mode Default</p>
+					<p class="text-xs text-omni-text-muted">Open videos in theater mode by default</p>
+				</div>
+				<div
+					class="relative h-6 w-11 rounded-full transition-colors {settings.theaterMode ? 'bg-omni-accent' : 'bg-omni-border'}"
+					onclick={() => toggle('theaterMode')}
+					role="switch"
+					aria-checked={settings.theaterMode}
+					tabindex="0"
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('theaterMode'); }}
+				>
+					<div
+						class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
+							{settings.theaterMode ? 'translate-x-5' : 'translate-x-0.5'}"
+					></div>
+				</div>
+			</label>
+
+			<!-- Show description on watch page -->
+			<label class="flex cursor-pointer items-center justify-between hover:bg-omni-surface-hover transition-colors rounded-md px-1 py-2">
+				<div>
+					<p class="text-sm font-medium text-omni-text">Video Description</p>
+					<p class="text-xs text-omni-text-muted">Show description section on watch page</p>
+				</div>
+				<div
+					class="relative h-6 w-11 rounded-full transition-colors {settings.showVideoDescription ? 'bg-omni-accent' : 'bg-omni-border'}"
+					onclick={() => toggle('showVideoDescription')}
+					role="switch"
+					aria-checked={settings.showVideoDescription}
+					tabindex="0"
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('showVideoDescription'); }}
+				>
+					<div
+						class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
+							{settings.showVideoDescription ? 'translate-x-5' : 'translate-x-0.5'}"
+					></div>
+				</div>
+			</label>
+
+			<!-- Show comments on watch page -->
+			<label class="flex cursor-pointer items-center justify-between hover:bg-omni-surface-hover transition-colors rounded-md px-1 py-2">
+				<div>
+					<p class="text-sm font-medium text-omni-text">Comments</p>
+					<p class="text-xs text-omni-text-muted">Show comments section on watch page</p>
+				</div>
+				<div
+					class="relative h-6 w-11 rounded-full transition-colors {settings.showVideoComments ? 'bg-omni-accent' : 'bg-omni-border'}"
+					onclick={() => toggle('showVideoComments')}
+					role="switch"
+					aria-checked={settings.showVideoComments}
+					tabindex="0"
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('showVideoComments'); }}
+				>
+					<div
+						class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
+							{settings.showVideoComments ? 'translate-x-5' : 'translate-x-0.5'}"
+					></div>
+				</div>
+			</label>
 		</div>
 	</section>
 

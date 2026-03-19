@@ -11,8 +11,8 @@
 	let videoEl = $state<HTMLVideoElement>();
 	let audioEl = $state<HTMLAudioElement>();
 	let showDescription = $state(false);
-	let theaterMode = $state(false);
-	let selectedQuality = $state(1080);
+	let theaterMode = $state(settingsStore.current.theaterMode);
+	let selectedQuality = $state(settingsStore.current.defaultQuality || 720);
 	let changingQuality = $state(false);
 
 	// Comments
@@ -319,10 +319,23 @@
 			.replace(/</g, '&lt;')
 			.replace(/>/g, '&gt;')
 			.replace(/"/g, '&quot;');
-		return escaped.replace(
+		// Linkify URLs
+		let result = escaped.replace(
 			/(https?:\/\/[^\s<]+)/g,
 			'<a href="$1" target="_blank" rel="noopener noreferrer" class="text-omni-accent hover:underline break-all">$1</a>'
 		);
+		// Make timestamps clickable (0:00, 1:23, 1:23:45)
+		result = result.replace(
+			/(?<![:\w])(\d{1,2}(?::\d{2}){1,2})(?![:\w])/g,
+			(match) => {
+				const parts = match.split(':').map(Number);
+				let seconds = 0;
+				if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+				else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+				return `<button class="text-omni-accent hover:underline font-mono" data-seek="${seconds}">${match}</button>`;
+			}
+		);
+		return result;
 	}
 
 	function linkifyComment(text: string): string {
@@ -341,9 +354,23 @@
 		window.addEventListener('keydown', handleKeydown);
 		window.addEventListener('pointerup', handleVideoPointerUp);
 
+		// Handle clicks on timestamp seek buttons in description
+		function handleSeekClick(e: MouseEvent) {
+			const btn = (e.target as HTMLElement).closest('[data-seek]');
+			if (btn && videoEl) {
+				const time = Number(btn.getAttribute('data-seek'));
+				if (!isNaN(time)) {
+					videoEl.currentTime = time;
+					if (audioEl) audioEl.currentTime = time;
+				}
+			}
+		}
+		document.addEventListener('click', handleSeekClick);
+
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			window.removeEventListener('pointerup', handleVideoPointerUp);
+			document.removeEventListener('click', handleSeekClick);
 			if (holdTimer) clearTimeout(holdTimer);
 			cleanupFn?.();
 			if (audioEl) {
@@ -487,7 +514,7 @@
 				<button
 					class="rounded border border-omni-border bg-omni-surface px-2 py-1 text-xs font-mono text-omni-text-muted
 						hover:border-omni-accent hover:text-omni-accent transition-colors"
-					onclick={() => theaterMode = !theaterMode}
+					onclick={() => { theaterMode = !theaterMode; settingsStore.update({ theaterMode }); }}
 					title={theaterMode ? 'Exit theater mode' : 'Theater mode'}
 				>
 					{theaterMode ? 'exit theater' : 'theater'}
@@ -584,36 +611,8 @@
 				{/if}
 			</div>
 
-			<!-- Chapters -->
-			{#if streamInfo.chapters && streamInfo.chapters.length > 0}
-				<div class="rounded-lg border border-omni-border bg-omni-surface p-3">
-					<h3 class="mb-2 text-xs font-mono font-semibold text-omni-text-muted uppercase tracking-wider">
-						Chapters
-					</h3>
-					<div class="space-y-1">
-						{#each streamInfo.chapters as chapter}
-							<button
-								class="flex w-full items-center gap-3 rounded px-2 py-1 text-left text-sm text-omni-text-muted
-									hover:bg-omni-surface-hover hover:text-omni-text transition-colors"
-								onclick={() => {
-									if (videoEl) {
-										videoEl.currentTime = chapter.start_time;
-										if (audioEl) audioEl.currentTime = chapter.start_time;
-									}
-								}}
-							>
-								<span class="shrink-0 font-mono text-xs text-omni-accent">
-									{formatDuration(chapter.start_time)}
-								</span>
-								<span class="truncate">{chapter.title}</span>
-							</button>
-						{/each}
-					</div>
-				</div>
-			{/if}
-
-			<!-- Description -->
-			{#if streamInfo.description}
+			<!-- Description (includes chapters) -->
+			{#if settings.showVideoDescription && (streamInfo.description || (streamInfo.chapters && streamInfo.chapters.length > 0))}
 				<div class="rounded-lg border border-omni-border bg-omni-surface">
 					<button
 						class="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-mono text-omni-text-muted
@@ -630,14 +629,44 @@
 						</svg>
 					</button>
 					{#if showDescription}
-						<div class="border-t border-omni-border px-4 py-3 animate-fade-in">
-							<pre class="whitespace-pre-wrap text-sm font-mono text-omni-text-muted leading-relaxed text-left">{@html linkifyDescription(streamInfo.description)}</pre>
+						<div class="border-t border-omni-border px-4 py-3 animate-fade-in space-y-3">
+							{#if streamInfo.chapters && streamInfo.chapters.length > 0}
+								<div>
+									<h4 class="mb-1.5 text-[11px] font-mono font-semibold text-omni-text-muted/70 uppercase tracking-wider">Chapters</h4>
+									<div class="space-y-0.5">
+										{#each streamInfo.chapters as chapter}
+											<button
+												class="flex w-full items-center gap-3 rounded px-2 py-1 text-left text-sm text-omni-text-muted
+													hover:bg-omni-surface-hover hover:text-omni-text transition-colors"
+												onclick={() => {
+													if (videoEl) {
+														videoEl.currentTime = chapter.start_time;
+														if (audioEl) audioEl.currentTime = chapter.start_time;
+													}
+												}}
+											>
+												<span class="shrink-0 font-mono text-xs text-omni-accent">
+													{formatDuration(chapter.start_time)}
+												</span>
+												<span class="truncate">{chapter.title}</span>
+											</button>
+										{/each}
+									</div>
+								</div>
+							{/if}
+							{#if streamInfo.description}
+								{#if streamInfo.chapters && streamInfo.chapters.length > 0}
+									<div class="border-t border-omni-border/50"></div>
+								{/if}
+								<pre class="whitespace-pre-wrap text-sm font-mono text-omni-text-muted leading-relaxed text-left">{@html linkifyDescription(streamInfo.description)}</pre>
+							{/if}
 						</div>
 					{/if}
 				</div>
 			{/if}
 
 			<!-- Comments -->
+			{#if settings.showVideoComments}
 			<div class="rounded-lg border border-omni-border bg-omni-surface">
 				<button
 					class="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-mono text-omni-text-muted
@@ -692,6 +721,7 @@
 					</div>
 				{/if}
 			</div>
+			{/if}
 		</div>
 	{/if}
 </div>

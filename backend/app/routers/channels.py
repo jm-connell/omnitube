@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Channel, Video
-from app.schemas import ChannelCreate, ChannelImport, ChannelOut, OPMLImport
+from app.schemas import ChannelCreate, ChannelImport, ChannelOut, ChannelUpdate, OPMLImport
 from app.services.feed import refresh_channel_feed
 from app.services.resolve import resolve_channel_id
 
@@ -76,6 +76,22 @@ async def remove_channel(channel_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(channel)
     await db.commit()
     return {"ok": True}
+
+
+@router.patch("/{channel_id}", response_model=ChannelOut)
+async def rename_channel(channel_id: str, data: ChannelUpdate, db: AsyncSession = Depends(get_db)):
+    """Rename a subscribed channel."""
+    result = await db.execute(
+        select(Channel).where(Channel.channel_id == channel_id)
+    )
+    channel = result.scalar_one_or_none()
+    if not channel:
+        raise HTTPException(404, "Channel not found")
+
+    channel.name = data.name.strip()
+    await db.commit()
+    await db.refresh(channel)
+    return channel
 
 
 @router.post("/import", response_model=list[ChannelOut])

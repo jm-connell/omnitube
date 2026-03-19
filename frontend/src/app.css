@@ -4,8 +4,9 @@
 
 /* ── Theme CSS Variables ─────────────────────────────────────────── */
 
-:root {
-  /* Dark theme (default) — Hyprland-inspired blue-gray */
+/* Dark Blue (default) — Hyprland-inspired blue-gray */
+:root,
+:root.theme-dark-blue {
   --omni-bg: #0f172a;
   --omni-surface: #1e293b;
   --omni-surface-hover: #283548;
@@ -16,7 +17,103 @@
   --omni-accent-hover: #38bdf8;
 }
 
-:root.light {
+/* OLED Certified — true black */
+:root.theme-oled {
+  --omni-bg: #000000;
+  --omni-surface: #0a0a0a;
+  --omni-surface-hover: #141414;
+  --omni-border: #1e1e1e;
+  --omni-text: #e4e4e7;
+  --omni-text-muted: #71717a;
+  --omni-accent: #60a5fa;
+  --omni-accent-hover: #3b82f6;
+}
+
+/* Very Dark — deep navy, not quite black */
+:root.theme-very-dark {
+  --omni-bg: #080c18;
+  --omni-surface: #101828;
+  --omni-surface-hover: #182038;
+  --omni-border: #1e2d4a;
+  --omni-text: #d1d5db;
+  --omni-text-muted: #6b7280;
+  --omni-accent: #818cf8;
+  --omni-accent-hover: #6366f1;
+}
+
+/* Hacker Green — terminal vibes */
+:root.theme-hacker-green {
+  --omni-bg: #0a0a0a;
+  --omni-surface: #111111;
+  --omni-surface-hover: #1a1a1a;
+  --omni-border: #1f3d1f;
+  --omni-text: #33ff33;
+  --omni-text-muted: #1a991a;
+  --omni-accent: #00ff41;
+  --omni-accent-hover: #00cc33;
+}
+
+:root.theme-hacker-green body,
+:root.theme-hacker-green * {
+  font-family:
+    "JetBrains Mono", "Fira Code", "Courier New", monospace !important;
+}
+
+/* Translucent — frosted glass over user background */
+:root.theme-translucent {
+  --omni-bg: rgba(15, 23, 42, 0.55);
+  --omni-surface: rgba(30, 41, 59, 0.5);
+  --omni-surface-hover: rgba(40, 53, 72, 0.55);
+  --omni-border: rgba(51, 65, 85, 0.45);
+  --omni-text: #f1f5f9;
+  --omni-text-muted: #cbd5e1;
+  --omni-accent: #7dd3fc;
+  --omni-accent-hover: #38bdf8;
+}
+
+:root.theme-translucent body {
+  background-color: transparent;
+  background-repeat: no-repeat;
+}
+
+/* macOS — clean Apple-inspired light */
+:root.theme-macos {
+  --omni-bg: #f5f5f7;
+  --omni-surface: #ffffff;
+  --omni-surface-hover: #fafafa;
+  --omni-border: #d2d2d7;
+  --omni-text: #1d1d1f;
+  --omni-text-muted: #6e6e73;
+  --omni-accent: #0071e3;
+  --omni-accent-hover: #0077ed;
+}
+
+/* Nord — Arctic blue palette */
+:root.theme-nord {
+  --omni-bg: #2e3440;
+  --omni-surface: #3b4252;
+  --omni-surface-hover: #434c5e;
+  --omni-border: #4c566a;
+  --omni-text: #eceff4;
+  --omni-text-muted: #d8dee9;
+  --omni-accent: #88c0d0;
+  --omni-accent-hover: #81a1c1;
+}
+
+/* Solarized Dark — Ethan Schoonover's palette */
+:root.theme-solarized {
+  --omni-bg: #002b36;
+  --omni-surface: #073642;
+  --omni-surface-hover: #0a4050;
+  --omni-border: #586e75;
+  --omni-text: #93a1a1;
+  --omni-text-muted: #657b83;
+  --omni-accent: #268bd2;
+  --omni-accent-hover: #2aa198;
+}
+
+/* Light */
+:root.theme-light {
   --omni-bg: #f1f5f9;
   --omni-surface: #ffffff;
   --omni-surface-hover: #f8fafc;
@@ -33,30 +130,60 @@
   --omni-accent: #7dd3fc;
   --omni-accent-hover: #38bdf8;
 }
+:root.theme-light.accent-sky,
+:root.theme-macos.accent-sky {
+  --omni-accent: #0284c7;
+  --omni-accent-hover: #0369a1;
+}
 
 :root.accent-violet {
   --omni-accent: #c4b5fd;
   --omni-accent-hover: #a78bfa;
+}
+:root.theme-light.accent-violet,
+:root.theme-macos.accent-violet {
+  --omni-accent: #7c3aed;
+  --omni-accent-hover: #6d28d9;
 }
 
 :root.accent-emerald {
   --omni-accent: #6ee7b7;
   --omni-accent-hover: #34d399;
 }
+:root.theme-light.accent-emerald,
+:root.theme-macos.accent-emerald {
+  --omni-accent: #059669;
+  --omni-accent-hover: #047857;
+}
 
 :root.accent-rose {
   --omni-accent: #fda4af;
   --omni-accent-hover: #fb7185;
+}
+:root.theme-light.accent-rose,
+:root.theme-macos.accent-rose {
+  --omni-accent: #e11d48;
+  --omni-accent-hover: #be123c;
 }
 
 :root.accent-amber {
   --omni-accent: #fcd34d;
   --omni-accent-hover: #fbbf24;
 }
+:root.theme-light.accent-amber,
+:root.theme-macos.accent-amber {
+  --omni-accent: #d97706;
+  --omni-accent-hover: #b45309;
+}
 
 :root.accent-cyan {
   --omni-accent: #67e8f9;
   --omni-accent-hover: #22d3ee;
+}
+:root.theme-light.accent-cyan,
+:root.theme-macos.accent-cyan {
+  --omni-accent: #0891b2;
+  --omni-accent-hover: #0e7490;
 }
 
 /* ── Base Styles ─────────────────────────────────────────────── */

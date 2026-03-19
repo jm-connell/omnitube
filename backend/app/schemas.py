@@ -1,8 +1,8 @@
 """Pydantic schemas for API request/response validation."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # ── Channels ──────────────────────────────────────────────────────────
@@ -10,6 +10,10 @@ from pydantic import BaseModel
 class ChannelCreate(BaseModel):
     channel_id: str
     name: str | None = None
+
+
+class ChannelUpdate(BaseModel):
+    name: str
 
 
 class ChannelOut(BaseModel):
@@ -48,6 +52,16 @@ class VideoOut(BaseModel):
     watched: bool = False
     watch_progress: int = 0
     channel_name: str | None = None  # joined from channels table
+
+    @field_validator("published_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, v: datetime | str) -> datetime:
+        """Ensure published_at always has UTC timezone info."""
+        if isinstance(v, str):
+            v = datetime.fromisoformat(v)
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        return v
 
     model_config = {"from_attributes": True}
 

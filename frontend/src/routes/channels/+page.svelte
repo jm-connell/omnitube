@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { getChannels, addChannel, removeChannel, type Channel } from '$lib/api';
+	import { getChannels, addChannel, removeChannel, renameChannel, type Channel } from '$lib/api';
 
 	let channels = $state<Channel[]>([]);
 	let loading = $state(true);
@@ -13,6 +13,8 @@
 	let addError = $state('');
 
 	let confirmDelete = $state<string | null>(null);
+	let editingChannel = $state<string | null>(null);
+	let editName = $state('');
 
 	async function loadChannels() {
 		loading = true;
@@ -51,6 +53,33 @@
 		} catch (e: any) {
 			error = e.message;
 		}
+	}
+
+	function startEditing(ch: Channel) {
+		editingChannel = ch.channel_id;
+		editName = ch.name;
+	}
+
+	async function saveEdit(channelId: string) {
+		const trimmed = editName.trim();
+		if (!trimmed) {
+			editingChannel = null;
+			return;
+		}
+		try {
+			const updated = await renameChannel(channelId, trimmed);
+			channels = channels.map((c) =>
+				c.channel_id === channelId ? { ...c, name: updated.name } : c
+			).sort((a, b) => a.name.localeCompare(b.name));
+		} catch (e: any) {
+			error = e.message;
+		}
+		editingChannel = null;
+	}
+
+	function handleEditKeydown(e: KeyboardEvent, channelId: string) {
+		if (e.key === 'Enter') saveEdit(channelId);
+		else if (e.key === 'Escape') editingChannel = null;
 	}
 
 	onMount(loadChannels);
@@ -145,12 +174,23 @@
 						hover:border-omni-accent/20 hover:bg-omni-surface-hover transition-all"
 				>
 					<div class="min-w-0 flex-1">
-						<a
-							href="/?channel={ch.channel_id}"
-							class="text-sm font-medium text-omni-text hover:text-omni-accent transition-colors"
-						>
-							{ch.name}
-						</a>
+						{#if editingChannel === ch.channel_id}
+							<input
+								class="w-full rounded border border-omni-accent bg-omni-bg px-2 py-1 text-sm font-medium text-omni-text
+									focus:outline-none"
+								bind:value={editName}
+								onblur={() => saveEdit(ch.channel_id)}
+								onkeydown={(e) => handleEditKeydown(e, ch.channel_id)}
+								autofocus
+							/>
+						{:else}
+							<a
+								href="/?channel={ch.channel_id}"
+								class="text-sm font-medium text-omni-text hover:text-omni-accent transition-colors"
+							>
+								{ch.name}
+							</a>
+						{/if}
 						<p class="mt-0.5 truncate text-[11px] font-mono text-omni-text-muted/50">
 							{ch.channel_id}
 						</p>
@@ -173,13 +213,23 @@
 								</button>
 							</div>
 						{:else}
-							<button
-								class="rounded px-2 py-1 text-xs font-mono text-omni-text-muted/40
-									opacity-0 group-hover:opacity-100 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-								onclick={() => confirmDelete = ch.channel_id}
-							>
-								remove
-							</button>
+							<div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+								<button
+									class="rounded px-2 py-1 text-xs font-mono text-omni-text-muted/40
+										hover:text-omni-accent hover:bg-omni-accent/10 transition-colors"
+									onclick={() => startEditing(ch)}
+									title="Rename"
+								>
+									rename
+								</button>
+								<button
+									class="rounded px-2 py-1 text-xs font-mono text-omni-text-muted/40
+										hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+									onclick={() => confirmDelete = ch.channel_id}
+								>
+									remove
+								</button>
+							</div>
 						{/if}
 					</div>
 				</div>

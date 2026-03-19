@@ -112,6 +112,16 @@ export function removeChannel(channel_id: string): Promise<{ ok: boolean }> {
   return fetchJSON(`/api/channels/${channel_id}`, { method: "DELETE" });
 }
 
+export function renameChannel(
+  channel_id: string,
+  name: string,
+): Promise<Channel> {
+  return fetchJSON(`/api/channels/${channel_id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export function importChannels(
   channels: Array<{ channel_id: string; name?: string }>,
 ): Promise<Channel[]> {
