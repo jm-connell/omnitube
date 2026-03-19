@@ -4,9 +4,13 @@ import re
 from urllib.parse import urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
+from app.models import Video
 from app.schemas import StreamInfo, CommentsResponse, Comment
 from app.services.ytdlp import get_stream_info, get_subtitle_url, get_comments, get_download_url
 
@@ -14,10 +18,23 @@ router = APIRouter(prefix="/api/stream", tags=["stream"])
 
 
 @router.get("/{video_id}", response_model=StreamInfo)
-async def stream_info(video_id: str, quality: int = Query(1440, ge=144, le=4320)):
+async def stream_info(
+    video_id: str,
+    quality: int = Query(1440, ge=144, le=4320),
+    db: AsyncSession = Depends(get_db),
+):
     """Extract direct stream URLs for a YouTube video via yt-dlp."""
     try:
         info = await get_stream_info(video_id, quality)
+        # Persist duration for Shorts filtering and display
+        if info.duration:
+            result = await db.execute(
+                select(Video).where(Video.video_id == video_id)
+            )
+            video = result.scalar_one_or_none()
+            if video and video.duration_seconds != info.duration:
+                video.duration_seconds = info.duration
+                await db.commit()
         return info
     except Exception as e:
         raise HTTPException(500, f"Failed to extract stream: {str(e)}")

@@ -31,7 +31,7 @@ async def add_channel(data: ChannelCreate, db: AsyncSession = Depends(get_db)):
     The backend resolves them to the canonical UC... channel ID.
     """
     try:
-        channel_id, resolved_name = await resolve_channel_id(data.channel_id)
+        channel_id, resolved_name, avatar_url = await resolve_channel_id(data.channel_id)
     except (ValueError, Exception) as e:
         raise HTTPException(400, f"Could not resolve channel: {e}")
 
@@ -44,6 +44,7 @@ async def add_channel(data: ChannelCreate, db: AsyncSession = Depends(get_db)):
     channel = Channel(
         channel_id=channel_id,
         name=data.name or resolved_name or channel_id,
+        thumbnail_url=avatar_url,
     )
     db.add(channel)
     await db.commit()
@@ -103,7 +104,7 @@ async def import_channels(data: ChannelImport, db: AsyncSession = Depends(get_db
     added = []
     for ch in data.channels:
         try:
-            channel_id, resolved_name = await resolve_channel_id(ch.channel_id)
+            channel_id, resolved_name, avatar_url = await resolve_channel_id(ch.channel_id)
         except (ValueError, Exception):
             continue  # Skip unresolvable entries during bulk import
 
@@ -115,6 +116,7 @@ async def import_channels(data: ChannelImport, db: AsyncSession = Depends(get_db
         channel = Channel(
             channel_id=channel_id,
             name=ch.name or resolved_name or channel_id,
+            thumbnail_url=avatar_url,
         )
         db.add(channel)
         added.append(channel)

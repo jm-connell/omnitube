@@ -74,7 +74,7 @@ def _parse_view_counts(xml_text: str) -> dict[str, int]:
     return view_counts
 
 
-def _parse_feed(xml_text: str) -> list[dict]:
+def _parse_feed(xml_text: str, filter_shorts: bool = False) -> list[dict]:
     """Parse an Atom feed and return a list of video dicts."""
     feed = feedparser.parse(xml_text)
     # Extract view counts from raw XML (feedparser doesn't handle media:community well)
@@ -89,6 +89,12 @@ def _parse_feed(xml_text: str) -> list[dict]:
                 video_id = link.split("watch?v=")[-1].split("&")[0]
         if not video_id:
             continue
+
+        # Skip likely Shorts from fallback (non-UULF) feeds
+        if filter_shorts:
+            title_lower = entry.get("title", "").lower()
+            if "#shorts" in title_lower or "#short" in title_lower:
+                continue
 
         # Parse published date (feedparser returns UTC time)
         published = entry.get("published_parsed") or entry.get("updated_parsed")
@@ -137,10 +143,10 @@ async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
     new_count = 0
     videos: list[dict] = []
 
-    for url in urls:
+    for i, url in enumerate(urls):
         try:
             xml_text = await _fetch_feed(url)
-            videos = _parse_feed(xml_text)
+            videos = _parse_feed(xml_text, filter_shorts=(i > 0))
             if videos:
                 break
         except Exception as e:
@@ -185,6 +191,22 @@ async def refresh_channel_feed(channel_id: str, db: AsyncSession) -> int:
     except Exception as e:
         logger.error(f"Failed to store videos for {channel_id}: {e}")
         await db.rollback()
+
+    # Backfill channel avatar if missing
+    try:
+        ch_result = await db.execute(
+            select(Channel).where(Channel.channel_id == channel_id)
+        )
+        channel_obj = ch_result.scalar_one_or_none()
+        if channel_obj and not channel_obj.thumbnail_url:
+            from app.services.resolve import fetch_channel_avatar
+
+            avatar = await fetch_channel_avatar(channel_id)
+            if avatar:
+                channel_obj.thumbnail_url = avatar
+                await db.commit()
+    except Exception:
+        pass
 
     return new_count
 

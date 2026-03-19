@@ -64,16 +64,57 @@
   --omni-bg: rgba(15, 23, 42, 0.55);
   --omni-surface: rgba(30, 41, 59, 0.5);
   --omni-surface-hover: rgba(40, 53, 72, 0.55);
-  --omni-border: rgba(51, 65, 85, 0.45);
+  --omni-border: rgba(255, 255, 255, 0.08);
   --omni-text: #f1f5f9;
   --omni-text-muted: #cbd5e1;
   --omni-accent: #7dd3fc;
   --omni-accent-hover: #38bdf8;
+  --glass-blur: 12px;
+  --glass-tint: 0.5;
+  --glass-tint-color: #0f172a;
 }
 
 :root.theme-translucent body {
   background-color: transparent;
   background-repeat: no-repeat;
+}
+
+/* Glass surface — element-level blur (default) */
+:root.theme-translucent .bg-omni-surface {
+  background: color-mix(
+    in srgb,
+    var(--glass-tint-color) calc(var(--glass-tint) * 100%),
+    transparent
+  );
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+
+:root.theme-translucent .bg-omni-surface-hover {
+  background: color-mix(
+    in srgb,
+    var(--glass-tint-color) calc(var(--glass-tint) * 120%),
+    transparent
+  );
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+/* Page-level blur mode — blur everything behind the main content area */
+:root.theme-translucent.glass-page-blur::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+:root.theme-translucent.glass-page-blur .bg-omni-surface {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* macOS — clean Apple-inspired light */
@@ -184,6 +225,11 @@
 :root.theme-macos.accent-cyan {
   --omni-accent: #0891b2;
   --omni-accent-hover: #0e7490;
+}
+
+/* Custom accent — values are set directly on <html> via JS */
+:root.accent-custom {
+  /* Uses --omni-accent and --omni-accent-hover set by applyTheme() */
 }
 
 /* ── Base Styles ─────────────────────────────────────────────── */

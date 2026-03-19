@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { getFeed, refreshFeed, type Video } from '$lib/api';
+	import { getFeed, refreshFeed, getLivestreams, type Video, type LivestreamInfo } from '$lib/api';
 	import { settingsStore } from '$lib/settings.svelte';
 	import { timeAgo, formatCount, formatDuration } from '$lib/utils';
 
@@ -13,6 +13,12 @@
 	let currentPage = $state(1);
 	let total = $state(0);
 	let error = $state('');
+
+	// Livestreams
+	let livestreams = $state<LivestreamInfo[]>([]);
+	let livestreamsOpen = $state(true);
+	let livestreamsLoading = $state(false);
+	let livestreamsChecked = $state(false);
 
 	const perPage = 30;
 	let hasMore = $derived(videos.length < total);
@@ -49,10 +55,23 @@
 			await refreshFeed();
 			currentPage = 1;
 			await loadFeed(1);
+			if (settings.showLivestreams) loadLivestreams();
 		} catch (e: any) {
 			error = e.message || 'Refresh failed';
 		} finally {
 			refreshing = false;
+		}
+	}
+
+	async function loadLivestreams() {
+		livestreamsLoading = true;
+		try {
+			livestreams = await getLivestreams();
+		} catch {
+			// Silently fail — livestreams are optional
+		} finally {
+			livestreamsLoading = false;
+			livestreamsChecked = true;
 		}
 	}
 
@@ -88,6 +107,7 @@
 
 	onMount(() => {
 		loadFeed();
+		if (settingsStore.current.showLivestreams) loadLivestreams();
 	});
 
 	// Reload when channel filter changes via URL navigation
@@ -139,6 +159,77 @@
 	{#if error}
 		<div class="mb-4 rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400 font-mono">
 			{error}
+		</div>
+	{/if}
+
+	<!-- Live Now Section -->
+	{#if settings.showLivestreams && (livestreams.length > 0 || (livestreamsLoading && !livestreamsChecked))}
+		<div class="mb-6">
+			<button
+				class="mb-3 flex w-full items-center gap-2 text-left"
+				onclick={() => livestreamsOpen = !livestreamsOpen}
+			>
+				<span class="relative flex h-2.5 w-2.5">
+					<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+					<span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500"></span>
+				</span>
+				<span class="text-sm font-mono font-semibold text-omni-text">
+					live now
+				</span>
+				<span class="text-xs font-mono text-omni-text-muted">({livestreams.length})</span>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="ml-auto h-4 w-4 text-omni-text-muted transition-transform {livestreamsOpen ? 'rotate-180' : ''}"
+					viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+					stroke-linecap="round" stroke-linejoin="round"
+				>
+					<polyline points="6 9 12 15 18 9"/>
+				</svg>
+			</button>
+
+			{#if livestreamsOpen}
+				{#if livestreamsLoading && livestreams.length === 0}
+					<div class="flex gap-3 overflow-x-auto pb-2">
+						{#each Array(3) as _}
+							<div class="w-56 shrink-0 animate-pulse rounded-lg border border-omni-border bg-omni-surface p-3">
+								<div class="aspect-video w-full rounded-md bg-omni-surface-hover mb-2"></div>
+								<div class="h-3 w-3/4 rounded bg-omni-surface-hover"></div>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="flex gap-3 overflow-x-auto pb-2">
+						{#each livestreams as stream (stream.video_id)}
+							<a
+								href="/watch/{stream.video_id}"
+								class="group w-56 shrink-0 rounded-lg border border-omni-border bg-omni-surface p-3
+									hover:border-red-500/30 hover:bg-omni-surface-hover transition-all"
+							>
+								{#if stream.thumbnail_url}
+									<div class="relative mb-2 aspect-video w-full overflow-hidden rounded-md bg-omni-bg">
+										<img
+											src={stream.thumbnail_url}
+											alt=""
+											class="h-full w-full object-cover transition-transform group-hover:scale-105"
+											loading="lazy"
+										/>
+										<span class="absolute bottom-1 left-1 flex items-center gap-1 rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-mono font-bold text-white uppercase">
+											<span class="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+											live
+										</span>
+									</div>
+								{/if}
+								<h3 class="line-clamp-2 text-xs font-mono font-medium text-omni-text group-hover:text-red-400 transition-colors leading-snug">
+									{stream.title}
+								</h3>
+								<p class="mt-1 text-[11px] font-mono text-omni-text-muted truncate">
+									{stream.channel_name}
+								</p>
+							</a>
+						{/each}
+					</div>
+				{/if}
+			{/if}
 		</div>
 	{/if}
 

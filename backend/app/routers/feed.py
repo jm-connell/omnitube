@@ -1,12 +1,12 @@
 """Video feed endpoints."""
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import Channel, Video
-from app.schemas import FeedResponse, VideoOut
+from app.schemas import FeedResponse, LivestreamInfo, VideoOut
 
 router = APIRouter(prefix="/api/feed", tags=["feed"])
 
@@ -24,6 +24,11 @@ async def get_feed(
     """
     base_query = select(Video)
     count_query = select(func.count()).select_from(Video)
+
+    # Exclude known Shorts (duration ≤ 60s) from feed
+    shorts_filter = or_(Video.duration_seconds.is_(None), Video.duration_seconds > 60)
+    base_query = base_query.where(shorts_filter)
+    count_query = count_query.where(shorts_filter)
 
     if channel_id:
         base_query = base_query.where(Video.channel_id == channel_id)
@@ -69,3 +74,12 @@ async def trigger_refresh(db: AsyncSession = Depends(get_db)):
 
     count = await refresh_all_feeds(db)
     return {"ok": True, "new_videos": count}
+
+
+@router.get("/livestreams", response_model=list[LivestreamInfo])
+async def get_live_streams(db: AsyncSession = Depends(get_db)):
+    """Check subscribed channels for active livestreams."""
+    from app.services.livestream import get_livestreams
+
+    streams = await get_livestreams(db)
+    return [LivestreamInfo(**s) for s in streams]

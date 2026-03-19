@@ -1,15 +1,15 @@
 <script lang="ts">
-	import { settingsStore, THEME_META, type ThemeName } from '$lib/settings.svelte';
+	import { settingsStore, THEME_META, type ThemeName, type AccentColor } from '$lib/settings.svelte';
 
 	const settings = $derived(settingsStore.current);
 
 	const accentColors = [
-		{ id: 'sky', label: 'Sky', swatch: '#7dd3fc' },
-		{ id: 'violet', label: 'Violet', swatch: '#c4b5fd' },
-		{ id: 'emerald', label: 'Emerald', swatch: '#6ee7b7' },
-		{ id: 'rose', label: 'Rose', swatch: '#fda4af' },
-		{ id: 'amber', label: 'Amber', swatch: '#fcd34d' },
-		{ id: 'cyan', label: 'Cyan', swatch: '#67e8f9' },
+		{ id: 'sky' as AccentColor, label: 'Sky', swatch: '#7dd3fc' },
+		{ id: 'violet' as AccentColor, label: 'Violet', swatch: '#c4b5fd' },
+		{ id: 'emerald' as AccentColor, label: 'Emerald', swatch: '#6ee7b7' },
+		{ id: 'rose' as AccentColor, label: 'Rose', swatch: '#fda4af' },
+		{ id: 'amber' as AccentColor, label: 'Amber', swatch: '#fcd34d' },
+		{ id: 'cyan' as AccentColor, label: 'Cyan', swatch: '#67e8f9' },
 	] as const;
 
 	const themes = Object.entries(THEME_META) as [ThemeName, { label: string; description: string }][];
@@ -28,8 +28,23 @@
 		settingsStore.update({ theme });
 	}
 
-	function setAccent(color: typeof settings.accentColor) {
+	function setAccent(color: AccentColor) {
 		settingsStore.update({ accentColor: color });
+	}
+
+	function setCustomAccent(hex: string) {
+		settingsStore.update({ accentColor: 'custom', customAccentColor: hex });
+	}
+
+	function addFavoriteColor() {
+		const hex = settings.customAccentColor;
+		if (hex && !settings.favoriteColors.includes(hex)) {
+			settingsStore.update({ favoriteColors: [...settings.favoriteColors, hex] });
+		}
+	}
+
+	function removeFavoriteColor(hex: string) {
+		settingsStore.update({ favoriteColors: settings.favoriteColors.filter((c) => c !== hex) });
 	}
 
 	function toggle(key: keyof typeof settings) {
@@ -108,6 +123,90 @@
 						{/if}
 					</div>
 				</div>
+
+				<!-- Translucent glass controls -->
+				<div class="space-y-3">
+					<div>
+						<div class="flex items-center justify-between mb-1">
+							<p class="text-sm font-medium text-omni-text">Blur Amount</p>
+							<span class="text-xs font-mono text-omni-text-muted">{settings.translucentBlur}px</span>
+						</div>
+						<input
+							type="range"
+							min="0" max="30" step="1"
+							value={settings.translucentBlur}
+							oninput={(e) => settingsStore.update({ translucentBlur: +e.currentTarget.value })}
+							class="w-full accent-[var(--omni-accent)] h-1.5 rounded-full appearance-none bg-omni-border cursor-pointer"
+						/>
+					</div>
+
+					<div>
+						<div class="flex items-center justify-between mb-1">
+							<p class="text-sm font-medium text-omni-text">Tint Opacity</p>
+							<span class="text-xs font-mono text-omni-text-muted">{settings.translucentTint}%</span>
+						</div>
+						<input
+							type="range"
+							min="0" max="100" step="5"
+							value={settings.translucentTint}
+							oninput={(e) => settingsStore.update({ translucentTint: +e.currentTarget.value })}
+							class="w-full accent-[var(--omni-accent)] h-1.5 rounded-full appearance-none bg-omni-border cursor-pointer"
+						/>
+					</div>
+
+					<div>
+						<p class="mb-2 text-sm font-medium text-omni-text">Tint Color</p>
+						<div class="flex items-center gap-3">
+							<div class="relative">
+								<input
+									type="color"
+									class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+									value={settings.translucentTintColor}
+									oninput={(e) => settingsStore.update({ translucentTintColor: e.currentTarget.value })}
+								/>
+								<div
+									class="h-8 w-8 rounded-full border-2 border-omni-border pointer-events-none"
+									style="background-color: {settings.translucentTintColor}"
+								></div>
+							</div>
+							<span class="text-xs font-mono text-omni-text-muted">{settings.translucentTintColor}</span>
+							<button
+								class="rounded-md border border-omni-border px-2 py-1 text-[11px] font-mono text-omni-text-muted
+									hover:border-omni-accent hover:text-omni-accent transition-colors"
+								onclick={() => settingsStore.update({ translucentTintColor: '#0f172a' })}
+							>reset</button>
+						</div>
+					</div>
+
+					<div>
+						<p class="mb-2 text-sm font-medium text-omni-text">Blur Mode</p>
+						<div class="flex gap-2">
+							<button
+								class="rounded-md border px-3 py-1.5 text-xs font-mono transition-all
+									{settings.translucentBlurMode === 'elements'
+										? 'border-omni-accent bg-omni-accent/10 text-omni-accent'
+										: 'border-omni-border text-omni-text-muted hover:border-omni-text-muted'}"
+								onclick={() => settingsStore.update({ translucentBlurMode: 'elements' })}
+							>
+								Elements Only
+							</button>
+							<button
+								class="rounded-md border px-3 py-1.5 text-xs font-mono transition-all
+									{settings.translucentBlurMode === 'page'
+										? 'border-omni-accent bg-omni-accent/10 text-omni-accent'
+										: 'border-omni-border text-omni-text-muted hover:border-omni-text-muted'}"
+								onclick={() => settingsStore.update({ translucentBlurMode: 'page' })}
+							>
+								Full Page
+							</button>
+						</div>
+						<p class="mt-1 text-xs text-omni-text-muted">
+							{settings.translucentBlurMode === 'elements'
+								? 'Each card/panel gets its own glass blur effect'
+								: 'Entire background is blurred behind all content'}
+						</p>
+					</div>
+				</div>
 			{/if}
 
 			<!-- Accent color -->
@@ -131,7 +230,66 @@
 							{/if}
 						</button>
 					{/each}
+
+					<!-- Favorite colors -->
+					{#each settings.favoriteColors as fav}
+						<div class="group relative">
+							<button
+								class="flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all
+									{settings.accentColor === 'custom' && settings.customAccentColor === fav
+										? 'border-omni-text scale-110'
+										: 'border-transparent hover:border-omni-border'}"
+								style="background-color: {fav}"
+								onclick={() => setCustomAccent(fav)}
+								title={fav}
+							>
+								{#if settings.accentColor === 'custom' && settings.customAccentColor === fav}
+									<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-omni-bg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="20 6 9 17 4 12"/>
+									</svg>
+								{/if}
+							</button>
+							<!-- Remove button on hover -->
+							<button
+								type="button"
+								class="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-omni-bg border border-omni-border text-[10px] text-omni-text-muted group-hover:flex cursor-pointer"
+								onclick={() => removeFavoriteColor(fav)}
+							>&times;</button>
+						</div>
+					{/each}
+
+					<!-- Custom color picker -->
+					<div class="relative flex h-8 w-8 items-center justify-center">
+						<input
+							type="color"
+							class="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+							value={settings.customAccentColor}
+							oninput={(e) => setCustomAccent(e.currentTarget.value)}
+							title="Pick custom color"
+						/>
+						<div
+							class="flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all pointer-events-none
+								{settings.accentColor === 'custom' && !settings.favoriteColors.includes(settings.customAccentColor)
+									? 'border-omni-text scale-110'
+									: 'border-dashed border-omni-border hover:border-omni-text-muted'}"
+							style="background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red)"
+						>
+						</div>
+					</div>
 				</div>
+
+				<!-- Save to favorites -->
+				{#if settings.accentColor === 'custom'}
+					<button
+						class="mt-2 rounded-md border border-omni-border px-2 py-1 text-[11px] font-mono text-omni-text-muted
+							hover:border-omni-accent hover:text-omni-accent transition-colors
+							disabled:opacity-30 disabled:cursor-not-allowed"
+						onclick={addFavoriteColor}
+						disabled={settings.favoriteColors.includes(settings.customAccentColor)}
+					>
+						{settings.favoriteColors.includes(settings.customAccentColor) ? 'saved' : '+ save color'}
+					</button>
+				{/if}
 			</div>
 		</div>
 	</section>
@@ -236,6 +394,29 @@
 		</h2>
 
 		<div class="space-y-1 rounded-lg border border-omni-border bg-omni-surface">
+			<!-- Livestreams -->
+			<label class="flex cursor-pointer items-center justify-between px-4 py-3 hover:bg-omni-surface-hover transition-colors">
+				<div>
+					<p class="text-sm font-medium text-omni-text">Livestreams</p>
+					<p class="text-xs text-omni-text-muted">Show "Live Now" section on the feed page</p>
+				</div>
+				<div
+					class="relative h-6 w-11 rounded-full transition-colors {settings.showLivestreams ? 'bg-omni-accent' : 'bg-omni-border'}"
+					onclick={() => toggle('showLivestreams')}
+					role="switch"
+					aria-checked={settings.showLivestreams}
+					tabindex="0"
+					onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggle('showLivestreams'); }}
+				>
+					<div
+						class="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform
+							{settings.showLivestreams ? 'translate-x-5' : 'translate-x-0.5'}"
+					></div>
+				</div>
+			</label>
+
+			<div class="border-t border-omni-border/50"></div>
+
 			<!-- Thumbnails -->
 			<label class="flex cursor-pointer items-center justify-between px-4 py-3 hover:bg-omni-surface-hover transition-colors">
 				<div>

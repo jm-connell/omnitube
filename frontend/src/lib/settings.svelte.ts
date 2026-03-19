@@ -18,11 +18,28 @@ export type ThemeName =
   | "solarized"
   | "light";
 
+export type AccentColor =
+  | "sky"
+  | "violet"
+  | "emerald"
+  | "rose"
+  | "amber"
+  | "cyan"
+  | "custom";
+
 export interface OmniSettings {
   // Theme
   theme: ThemeName;
-  accentColor: "sky" | "violet" | "emerald" | "rose" | "amber" | "cyan";
+  accentColor: AccentColor;
+  customAccentColor: string; // hex color for custom accent
+  favoriteColors: string[]; // saved custom hex colors
   backgroundImage: string; // URL for translucent theme
+
+  // Translucent theme controls
+  translucentBlur: number; // backdrop blur in px (0-30)
+  translucentTint: number; // tint opacity 0-100
+  translucentTintColor: string; // hex color for the glass tint
+  translucentBlurMode: "elements" | "page"; // blur on elements or full page
 
   // UI toggles
   showThumbnails: boolean;
@@ -30,6 +47,7 @@ export interface OmniSettings {
   showViewCount: boolean;
   showLikeCount: boolean;
   showChannelAvatar: boolean;
+  showLivestreams: boolean;
 
   // Video page
   showVideoDescription: boolean;
@@ -86,12 +104,19 @@ export const THEME_META: Record<
 const DEFAULTS: OmniSettings = {
   theme: "dark-blue",
   accentColor: "sky",
+  customAccentColor: "#7dd3fc",
+  favoriteColors: [],
   backgroundImage: "",
+  translucentBlur: 12,
+  translucentTint: 50,
+  translucentTintColor: "#0f172a",
+  translucentBlurMode: "elements",
   showThumbnails: true,
   showDescriptions: false,
   showViewCount: true,
   showLikeCount: false,
   showChannelAvatar: true,
+  showLivestreams: true,
   showVideoDescription: true,
   showVideoComments: true,
   theaterMode: false,
@@ -100,6 +125,15 @@ const DEFAULTS: OmniSettings = {
 };
 
 const STORAGE_KEY = "omnitube-settings";
+
+/** Darken a hex color by a percentage (0-100). */
+function darkenHex(hex: string, percent: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.max(0, ((num >> 16) & 0xff) - Math.round(2.55 * percent));
+  const g = Math.max(0, ((num >> 8) & 0xff) - Math.round(2.55 * percent));
+  const b = Math.max(0, (num & 0xff) - Math.round(2.55 * percent));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+}
 
 function loadSettings(): OmniSettings {
   if (!browser) return { ...DEFAULTS };
@@ -149,6 +183,39 @@ function createSettings() {
     // Accent color
     html.className = html.className.replace(/accent-\w+/g, "").trim();
     html.classList.add(`accent-${settings.accentColor}`);
+
+    // Custom accent: set CSS custom properties directly
+    if (settings.accentColor === "custom" && settings.customAccentColor) {
+      const hex = settings.customAccentColor;
+      html.style.setProperty("--omni-accent", hex);
+      // Darken slightly for hover
+      html.style.setProperty("--omni-accent-hover", darkenHex(hex, 15));
+    } else {
+      html.style.removeProperty("--omni-accent");
+      html.style.removeProperty("--omni-accent-hover");
+    }
+
+    // Translucent theme settings
+    if (settings.theme === "translucent") {
+      html.style.setProperty("--glass-blur", `${settings.translucentBlur}px`);
+      html.style.setProperty(
+        "--glass-tint",
+        `${settings.translucentTint / 100}`,
+      );
+      html.style.setProperty(
+        "--glass-tint-color",
+        settings.translucentTintColor || "#0f172a",
+      );
+      html.classList.toggle(
+        "glass-page-blur",
+        settings.translucentBlurMode === "page",
+      );
+    } else {
+      html.style.removeProperty("--glass-blur");
+      html.style.removeProperty("--glass-tint");
+      html.style.removeProperty("--glass-tint-color");
+      html.classList.remove("glass-page-blur");
+    }
 
     // Background image for translucent theme
     if (settings.theme === "translucent" && settings.backgroundImage) {

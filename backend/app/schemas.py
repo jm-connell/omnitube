@@ -110,6 +110,16 @@ class CommentsResponse(BaseModel):
     count: int | None = None
 
 
+# ── Livestreams ───────────────────────────────────────────────────────
+
+class LivestreamInfo(BaseModel):
+    channel_id: str
+    channel_name: str
+    video_id: str
+    title: str
+    thumbnail_url: str | None = None
+
+
 # ── App State ─────────────────────────────────────────────────────────
 
 class SetupStatus(BaseModel):

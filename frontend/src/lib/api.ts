@@ -157,6 +157,20 @@ export function refreshFeed(): Promise<{ ok: boolean; new_videos: number }> {
   return fetchJSON("/api/feed/refresh");
 }
 
+// ── Livestreams ──────────────────────────────────────────────────────
+
+export interface LivestreamInfo {
+  channel_id: string;
+  channel_name: string;
+  video_id: string;
+  title: string;
+  thumbnail_url: string | null;
+}
+
+export function getLivestreams(): Promise<LivestreamInfo[]> {
+  return fetchJSON("/api/feed/livestreams");
+}
+
 // ── Stream ───────────────────────────────────────────────────────
 
 export function getStreamInfo(

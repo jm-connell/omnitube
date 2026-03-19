@@ -34,7 +34,7 @@
 		try {
 			let channelId = newChannelId.trim();
 			const ch = await addChannel(channelId, newChannelName.trim() || undefined);
-			channels = [...channels, ch].sort((a, b) => a.name.localeCompare(b.name));
+			channels = [...channels, ch].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 			newChannelId = '';
 			newChannelName = '';
 			showAddForm = false;
@@ -70,7 +70,7 @@
 			const updated = await renameChannel(channelId, trimmed);
 			channels = channels.map((c) =>
 				c.channel_id === channelId ? { ...c, name: updated.name } : c
-			).sort((a, b) => a.name.localeCompare(b.name));
+			).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 		} catch (e: any) {
 			error = e.message;
 		}
@@ -170,9 +170,20 @@
 		<div class="space-y-1">
 			{#each channels as ch (ch.channel_id)}
 				<div
-					class="group flex items-center justify-between rounded-lg border border-omni-border bg-omni-surface px-4 py-3
+					class="group flex items-center gap-3 rounded-lg border border-omni-border bg-omni-surface px-4 py-3
 						hover:border-omni-accent/20 hover:bg-omni-surface-hover transition-all"
 				>
+					{#if ch.thumbnail_url}
+						<img
+							src={ch.thumbnail_url}
+							alt=""
+							class="h-9 w-9 shrink-0 rounded-full object-cover"
+						/>
+					{:else}
+						<div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-omni-accent/15 text-sm font-semibold text-omni-accent">
+							{ch.name.charAt(0).toUpperCase()}
+						</div>
+					{/if}
 					<div class="min-w-0 flex-1">
 						{#if editingChannel === ch.channel_id}
 							<input
