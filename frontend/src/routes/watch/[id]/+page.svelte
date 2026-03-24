@@ -112,6 +112,7 @@
 	}
 
 	function syncAudio() {
+		cleanupFn?.();
 		if (!audioEl || !videoEl) return;
 		const audio = audioEl;
 		const video = videoEl;
