@@ -20,6 +20,10 @@ logger = logging.getLogger("omnitube.ytdlp")
 _subtitle_cache: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_TTL = 3600  # 1 hour
 
+# Stream URL cache: {(video_id, quality): (timestamp, video_url, audio_url)}
+_stream_url_cache: dict[tuple[str, int], tuple[float, str, str | None]] = {}
+_STREAM_CACHE_TTL = 18000  # 5 hours (YouTube URLs expire after ~6h)
+
 QUALITY_FORMATS = {
     2160: "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=2160]+bestaudio/best[ext=mp4]/best",
     1440: "bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1440]+bestaudio/best[ext=mp4]/best",
@@ -162,6 +166,9 @@ async def get_stream_info(video_id: str, quality: int = DEFAULT_QUALITY) -> Stre
     # Available qualities
     available_qualities = _get_available_qualities(info)
 
+    # Cache stream URLs for proxy endpoint
+    _stream_url_cache[(video_id, quality)] = (time.time(), video_url, audio_url)
+
     return StreamInfo(
         video_url=video_url,
         audio_url=audio_url,
@@ -178,6 +185,23 @@ async def get_stream_info(video_id: str, quality: int = DEFAULT_QUALITY) -> Stre
         height=height,
         available_qualities=available_qualities,
     )
+
+
+def invalidate_stream_url_cache(video_id: str, quality: int) -> None:
+    """Remove cached stream URLs for a video+quality."""
+    _stream_url_cache.pop((video_id, quality), None)
+
+
+async def get_cached_stream_urls(video_id: str, quality: int = DEFAULT_QUALITY) -> tuple[str, str | None]:
+    """Get video/audio CDN URLs, using cache to avoid re-running yt-dlp."""
+    cache_key = (video_id, quality)
+    entry = _stream_url_cache.get(cache_key)
+    if entry:
+        ts, video_url, audio_url = entry
+        if time.time() - ts < _STREAM_CACHE_TTL:
+            return video_url, audio_url
+    info = await get_stream_info(video_id, quality)
+    return info.video_url, info.audio_url
 
 
 def _extract_comments_sync(video_id: str, max_comments: int = 30) -> list[dict]:

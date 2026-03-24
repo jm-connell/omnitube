@@ -459,7 +459,7 @@
 				autoplay
 				playsinline
 				preload="auto"
-				src={streamInfo.video_url}
+				src="/api/stream/{$page.params.id}/proxy/video?quality={selectedQuality}"
 				onloadeddata={() => {
 					if (streamInfo?.audio_url) {
 						syncAudio();
@@ -483,7 +483,7 @@
 			{#if streamInfo.audio_url}
 				<audio
 					bind:this={audioEl}
-					src={streamInfo.audio_url}
+					src="/api/stream/{$page.params.id}/proxy/audio?quality={selectedQuality}"
 					preload="auto"
 				></audio>
 			{/if}
